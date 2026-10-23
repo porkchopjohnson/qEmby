@@ -2,7 +2,15 @@
 
 This fork targets **Fedora 44 x86_64 / KDE Plasma**, using Fedora's Qt 6,
 libmpv, and QtKeychain libraries. The application reports version
-`0.0.8-security.3`; the RPM release is `3.security.fc44`.
+`0.0.8-security.4`; the RPM release is `4.security.fc44`.
+
+## Fullscreen fix in security.4
+
+- Hide the actual custom title bar during immersive playback and fullscreen,
+  instead of targeting the former menu-widget slot. Restore it when returning
+  to normal browsing, while keeping it hidden for windowed immersive playback.
+- Regression checks cover fullscreen entry/exit and title-bar restoration;
+  the real-video tests also assert that fullscreen has no application title bar.
 
 ## Playback fixes in security.3
 
@@ -78,7 +86,7 @@ new configuration sync exports; sign in again on each device.
 ## Install the built package
 
 ```bash
-sudo dnf install ./build-fedora/qemby-0.0.8-3.security.fc44.x86_64.rpm
+sudo dnf install ./build-fedora/qemby-0.0.8-4.security.fc44.x86_64.rpm
 ```
 
 Launch **qEmby** from KDE's application launcher, or run `qemby`.

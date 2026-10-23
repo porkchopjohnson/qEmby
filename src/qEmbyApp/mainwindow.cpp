@@ -275,6 +275,8 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     auto windowBar = new QWK::WindowBar();
+    m_titleBar = windowBar;
+    m_titleBar->setObjectName(QStringLiteral("qembyTitleBar"));
 #if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
     windowBar->layout()->setContentsMargins(80, 0, 0, 0);
 #endif
@@ -457,6 +459,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_viewStack, &QStackedWidget::currentChanged, this, [this](int index) {
         QWidget *currentView = m_viewStack->widget(index);
         if (!currentView) return;
+        m_isImmersive = currentView == m_homeView && m_homeView->activePlayerView();
+        updateWindowChromeVisibility();
 
         bool showSearch = currentView->property("showGlobalSearch").toBool();
         m_globalSearchBox->setVisible(showSearch);
@@ -552,9 +556,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     
     connect(m_homeView, &HomeView::immersiveStateChanged, this, [this, agent](bool isImmersive) {
-        if (this->menuWidget()) {
-            this->menuWidget()->setVisible(!isImmersive);
-        }
+        m_isImmersive = isImmersive;
+        updateWindowChromeVisibility();
 #if defined(Q_OS_MACOS) || defined(Q_OS_MAC)
         if (!isImmersive) {
             agent->setWindowAttribute("no-system-buttons", false);
@@ -827,6 +830,19 @@ void MainWindow::showUpdateConfirmation()
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::updateWindowChromeVisibility()
+{
+    if (m_titleBar)
+        m_titleBar->setVisible(!m_isImmersive && !isFullScreen());
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange)
+        updateWindowChromeVisibility();
+}
 
 void MainWindow::setupGlobalSearchHistory()
 {

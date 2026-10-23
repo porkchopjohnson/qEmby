@@ -2,6 +2,7 @@
 #include "mainwindow.h"
 #include "components/mpvwidget.h"
 #include "views/media/playerview.h"
+#include "views/user/homeview.h"
 #include "models/media/playerlaunchcontext.h"
 #include <qembycore.h>
 #include <services/manager/servermanager.h>
@@ -28,6 +29,71 @@ struct ProbeState {
     QPointer<PlayerView> player;
     QPointer<MpvWidget> video;
 };
+}
+
+void startWindowChromeProbe(MainWindow &window)
+{
+    auto *bar = window.findChild<QWidget *>("qembyTitleBar");
+    auto *home = window.findChild<HomeView *>();
+    if (!bar || !home || !bar->isVisible()) {
+        qCritical("Fullscreen chrome probe: initial title bar is unavailable");
+        qApp->exit(1);
+        return;
+    }
+    auto *poll = new QTimer(&window);
+    QObject::connect(poll, &QTimer::timeout, &window,
+                     [&window, bar, home, stage = 0, attempts = 0]() mutable {
+        if (++attempts > 40) {
+            qCritical("Fullscreen chrome probe timed out");
+            qApp->exit(1);
+            return;
+        }
+        auto verify = [](bool condition) {
+            if (!condition) {
+                qCritical("Fullscreen chrome visibility regression: FAIL");
+                qApp->exit(1);
+            }
+            return condition;
+        };
+        switch (stage) {
+        case 0:
+            home->immersiveStateChanged(true);
+            if (!verify(!bar->isVisible())) return;
+            window.showFullScreen();
+            ++stage;
+            break;
+        case 1:
+            if (!window.isFullScreen()) return;
+            if (!verify(!bar->isVisible())) return;
+            home->immersiveStateChanged(false);
+            if (!verify(!bar->isVisible())) return;
+            window.showNormal();
+            ++stage;
+            break;
+        case 2:
+            if (window.isFullScreen()) return;
+            if (!verify(bar->isVisible())) return;
+            home->immersiveStateChanged(true);
+            window.showFullScreen();
+            ++stage;
+            break;
+        case 3:
+            if (!window.isFullScreen()) return;
+            if (!verify(!bar->isVisible())) return;
+            window.showNormal();
+            ++stage;
+            break;
+        case 4:
+            if (window.isFullScreen()) return;
+            if (!verify(!bar->isVisible())) return;
+            home->immersiveStateChanged(false);
+            if (!verify(bar->isVisible())) return;
+            qInfo("Fullscreen title-bar hiding and restore regression: PASS");
+            qApp->exit(0);
+            break;
+        }
+    });
+    poll->start(100);
 }
 
 void startPlaybackUiProbe(MainWindow &window, const QString &mediaPath,
@@ -117,7 +183,9 @@ void startPlaybackUiProbe(MainWindow &window, const QString &mediaPath,
 
     auto *poll = new QTimer(&window);
     QObject::connect(poll, &QTimer::timeout, &window, [state, &window, expectFailure, delayStartReply, finishNaturally] {
-        if (!state->player || !state->video || !window.isVisible() || state->prematureStart ||
+        const auto *bar = window.findChild<QWidget *>("qembyTitleBar");
+        const bool fullscreenChromeVisible = window.isFullScreen() && bar && bar->isVisible();
+        if (!state->player || !state->video || !window.isVisible() || fullscreenChromeVisible || state->prematureStart ||
             state->starts > 1 || state->stops > 1 || state->elapsed.elapsed() > 15000) {
             qCritical() << "Playback UI probe failed" << "starts:" << state->starts
                         << "stops:" << state->stops << "prematureStart:" << state->prematureStart;

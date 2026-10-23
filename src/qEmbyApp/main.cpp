@@ -28,12 +28,14 @@
 int main(int argc, char *argv[]) {
 #ifdef QEMBY_UI_TESTS
   bool testUiLifecycle = false;
+  bool testWindowChrome = false;
   QString testMediaPath;
   bool testMediaFailure = false;
   bool testDelayedStart = false;
   bool testNaturalEnd = false;
   for (int i = 1; i < argc; ++i) {
     testUiLifecycle |= QByteArray(argv[i]) == "--test-ui-lifecycle";
+    testWindowChrome |= QByteArray(argv[i]) == "--test-fullscreen-chrome";
     const QByteArray arg(argv[i]);
     if (arg == "--test-video-render" || arg == "--test-video-failure" || arg == "--test-video-start-race" || arg == "--test-video-eof") {
       if (i + 1 >= argc)
@@ -45,7 +47,7 @@ int main(int argc, char *argv[]) {
     }
   }
   QTemporaryDir testHome;
-  if (testUiLifecycle || !testMediaPath.isEmpty()) {
+  if (testUiLifecycle || testWindowChrome || !testMediaPath.isEmpty()) {
     if (!testHome.isValid())
       return 1;
     qputenv("XDG_CONFIG_HOME", testHome.path().toUtf8());
@@ -121,6 +123,10 @@ int main(int argc, char *argv[]) {
   w.show();
 
 #ifdef QEMBY_UI_TESTS
+  if (testWindowChrome) {
+    QTimer::singleShot(200, &w, [&w] { startWindowChromeProbe(w); });
+    return a.exec();
+  }
   if (!testMediaPath.isEmpty()) {
     QTimer::singleShot(200, &w, [&w, testMediaPath, testMediaFailure, testDelayedStart, testNaturalEnd] {
       startPlaybackUiProbe(w, testMediaPath, testMediaFailure, testDelayedStart, testNaturalEnd);

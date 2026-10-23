@@ -13,6 +13,12 @@ set_tests_properties(kde-titlebar-lifetime PROPERTIES
     PASS_REGULAR_EXPRESSION "KDE title-bar lifetime and active-server-change regression: PASS"
     TIMEOUT 30)
 
+add_test(NAME kde-fullscreen-chrome COMMAND qEmbyApp --test-fullscreen-chrome)
+set_tests_properties(kde-fullscreen-chrome PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_STYLE_OVERRIDE=breeze"
+    PASS_REGULAR_EXPRESSION "Fullscreen title-bar hiding and restore regression: PASS"
+    TIMEOUT 15)
+
 set(QEMBY_TEST_MEDIA_FILE "" CACHE FILEPATH "Optional local video fixture for real Wayland playback tests")
 if(QEMBY_TEST_MEDIA_FILE)
     add_test(NAME wayland-video-resume COMMAND qEmbyApp --test-video-render "${QEMBY_TEST_MEDIA_FILE}")

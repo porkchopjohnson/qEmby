@@ -30,10 +30,12 @@ class MainWindow : public QMainWindow
         void navigateToLogin();
 
     protected:
+        void changeEvent(QEvent *event) override;
         bool eventFilter(QObject * watched, QEvent * event) override;
         void closeEvent(QCloseEvent * event) override; 
 
     private:
+        void updateWindowChromeVisibility();
         void setupGlobalSearchHistory();
         void hideGlobalSearchTransientUi();
         void updateGlobalSearchCompleter(const QString &text = QString());
@@ -47,6 +49,8 @@ class MainWindow : public QMainWindow
         LoginView *m_loginView;
         HomeView *m_homeView;
         QLineEdit *m_globalSearchBox = nullptr;
+        QWidget *m_titleBar = nullptr;
+        bool m_isImmersive = false;
         QCompleter *m_globalSearchCompleter = nullptr;
         QStringListModel *m_globalSearchModel = nullptr;
         SearchHistoryPopup *m_globalSearchHistoryPopup = nullptr;
