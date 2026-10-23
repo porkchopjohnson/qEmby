@@ -295,6 +295,8 @@ void MpvController::eventHandler() {
                 emit endOfFile("eof");
             } else if (prop && prop->reason == MPV_END_FILE_REASON_ERROR) {
                 emit endOfFile("error");
+                emit errorOccurred(tr("Playback failed: %1")
+                                       .arg(QString::fromUtf8(mpv_error_string(prop->error))));
             }
             break;
         }

@@ -2,7 +2,23 @@
 
 This fork targets **Fedora 44 x86_64 / KDE Plasma**, using Fedora's Qt 6,
 libmpv, and QtKeychain libraries. The application reports version
-`0.0.8-security.2`; the RPM release is `2.security.fc44`.
+`0.0.8-security.3`; the RPM release is `3.security.fc44`.
+
+## Playback fixes in security.3
+
+- Explicitly request desktop OpenGL for the desktop core-profile format. Qt
+  Wayland can otherwise select OpenGL ES, producing `EGL_BAD_MATCH` on NVIDIA
+  when the embedded player creates its rendering surface.
+- Announce playback to the media server only after a video frame has actually
+  been presented. Failed loads/render initialization no longer create ghost
+  playback sessions. Late start replies are followed by a stop notification if
+  playback was stopped or switched while the request was in flight.
+- Handle player errors visibly, stop failed/finished sessions, and time out
+  rendering initialization instead of leaving a permanent loading spinner.
+- Optional real-display tests exercise the actual embedded player with a local
+  video, a mock media server, a resume seek, natural end-of-file, a missing file,
+  and delayed playback start responses. They use isolated temporary settings
+  and no real accounts.
 
 ## Compatibility fixes in security.2
 
@@ -62,7 +78,7 @@ new configuration sync exports; sign in again on each device.
 ## Install the built package
 
 ```bash
-sudo dnf install ./build-fedora/qemby-0.0.8-2.security.fc44.x86_64.rpm
+sudo dnf install ./build-fedora/qemby-0.0.8-3.security.fc44.x86_64.rpm
 ```
 
 Launch **qEmby** from KDE's application launcher, or run `qemby`.
@@ -87,6 +103,10 @@ cmake --build build-fedora --parallel 6
 ctest --test-dir build-fedora --output-on-failure
 cpack --config build-fedora/CPackConfig.cmake -B build-fedora
 ```
+
+To include real graphics/playback checks in a Wayland desktop session, configure
+with `-DQEMBY_TEST_MEDIA_FILE=/absolute/path/to/a/local-video.mkv` and run CTest.
+Use a short (5–10-second) video; the resume check starts two seconds in.
 
 The regression suite uses an unavailable D-Bus session to ensure it cannot
 access your wallet. To verify the real wallet explicitly, run these as separate

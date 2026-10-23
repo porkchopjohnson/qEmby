@@ -1589,8 +1589,28 @@ void PlayerView::setupUi()
 
     
     connect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged);
+    connect(m_mpvWidget, &MpvWidget::positionChanged, this, [this](double) {
+        if (m_isPlaying && m_mpvWidget->hasPresentedVideo())
+            startPlaybackSession();
+    });
     connect(m_mpvWidget, &MpvWidget::durationChanged, this, &PlayerView::onDurationChanged);
     connect(m_mpvWidget, &MpvWidget::playbackStateChanged, this, &PlayerView::onPlaybackStateChanged);
+    connect(m_mpvWidget, &MpvWidget::videoPresentationChanged, this, [this](bool presented) {
+        if (presented)
+            startPlaybackSession();
+    });
+    connect(m_mpvWidget, &MpvWidget::errorOccurred, this, [this](const QString &message) {
+        if (m_isViewTearingDown || m_hasReportedStop)
+            return;
+        qWarning().noquote() << "[PlayerView] Playback failed:" << message;
+        m_isPlaying = false;
+        m_isBuffering = false;
+        m_isSeeking = false;
+        stopAndReport();
+        updateLoadingState();
+        m_playPauseBtn->setIcon(QIcon(":/svg/player/play.svg"));
+        showToast(message);
+    });
     connect(m_mpvWidget, &MpvWidget::relayActiveChanged, this,
             [this](bool active)
             {
@@ -1650,6 +1670,7 @@ void PlayerView::setupUi()
                 }
                 if (m_isPlaybackFinished)
                 {
+                    finishServerSession();
                     autoPlayNextMediaIfEnabled();
                 }
             });
@@ -2472,7 +2493,22 @@ void PlayerView::stopAndReport()
     }
     closeActivePlayerDialog();
 
-    if (!m_currentMediaId.isEmpty() && m_core && m_core->mediaService())
+    finishServerSession();
+
+    if (m_mpvWidget)
+    {
+        if (m_danmakuController)
+            m_danmakuController->clearPlaybackContext();
+        disconnect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged);
+        m_mpvWidget->stop();
+    }
+}
+
+void PlayerView::finishServerSession()
+{
+    m_reportTimer->stop();
+    if (!m_currentMediaId.isEmpty() && !m_currentPlaySessionId.isEmpty() &&
+        m_core && m_core->mediaService())
     {
         long long currentTicks = static_cast<long long>(m_currentPosition * 10000000.0);
 
@@ -2515,16 +2551,6 @@ void PlayerView::stopAndReport()
         QTimer::singleShot(10000, m_core, [lingeringTask]() { delete lingeringTask; });
     }
 
-    if (m_mpvWidget)
-    {
-        if (m_danmakuController)
-        {
-            m_danmakuController->clearPlaybackContext();
-        }
-        
-        disconnect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged);
-        m_mpvWidget->controller()->command(QVariantList{"stop"});
-    }
 }
 
 void PlayerView::beginViewTeardown()
@@ -3392,6 +3418,7 @@ void PlayerView::onMpvPropertyChanged(const QString &property, const QVariant &v
             {
                 m_playPauseBtn->setIcon(QIcon(":/svg/player/play.svg"));
             }
+            finishServerSession();
             autoPlayNextMediaIfEnabled();
         }
     }
@@ -4223,6 +4250,8 @@ void PlayerView::resumePlaybackAfterFinishedSeek()
              << "| duration=" << m_totalDuration;
 
     m_isPlaybackFinished = false;
+    ++m_playbackGeneration;
+    m_playbackStartRequested = false;
     m_isPlaying = true;
     m_isBuffering = false;
     m_isSeeking = false;
@@ -4785,6 +4814,8 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     connect(m_mpvWidget, &MpvWidget::positionChanged, this, &PlayerView::onPositionChanged, Qt::UniqueConnection);
 
     m_hasReportedStop = false;
+    ++m_playbackGeneration;
+    m_playbackStartRequested = false;
     m_isPlaybackFinished = false;
     m_autoPlayAdvanceInProgress = false;
     m_currentMediaId = mediaId;
@@ -5228,22 +5259,42 @@ void PlayerView::playMedia(const QString &mediaId, const QString &title, const Q
     }
 
     
-    auto startSessionTask = [](QPointer<PlayerView> safeThis, MediaService *s, QString mId, QString sId,
-                               long long ticks) -> QCoro::Task<void>
-    {
-        QString sessionId = co_await s->reportPlaybackStart(mId, sId, ticks);
-        if (safeThis && safeThis->m_currentMediaId == mId)
-        {
-            safeThis->m_currentPlaySessionId = sessionId;
-        }
-    };
-    startSessionTask(QPointer<PlayerView>(this), m_core->mediaService(), m_currentMediaId, m_currentMediaSourceId,
-                     startPositionTicks);
-
-    m_reportTimer->start();
+    // Report playback only after the renderer has actually presented a frame.
     m_mousePollTimer->start();
     m_bufferTimer->start();
     showControls();
+}
+
+void PlayerView::startPlaybackSession()
+{
+    if (m_isViewTearingDown || m_hasReportedStop || m_isPlaybackFinished || m_playbackStartRequested ||
+        m_currentMediaId.isEmpty() || !m_core || !m_core->mediaService())
+        return;
+    m_playbackStartRequested = true;
+    auto startSession = [](QPointer<PlayerView> view, QPointer<MediaService> service,
+                           quint64 generation, QString mediaId, QString sourceId,
+                           long long ticks) -> QCoro::Task<void> {
+        try {
+            const QString sessionId = co_await service->reportPlaybackStart(mediaId, sourceId, ticks);
+            if (!service || sessionId.isEmpty())
+                co_return;
+            if (view && !view->m_hasReportedStop && !view->m_isViewTearingDown &&
+                !view->m_isPlaybackFinished &&
+                view->m_playbackGeneration == generation) {
+                view->m_currentPlaySessionId = sessionId;
+                view->m_reportTimer->start();
+            } else {
+                // Closing/failing/switching media while the start request was
+                // in flight must not leave a ghost session on the server.
+                co_await service->reportPlaybackStopped(mediaId, sourceId, ticks, sessionId);
+            }
+        } catch (const std::exception &e) {
+            qWarning() << "[PlayerView] Playback session notification failed:" << e.what();
+        }
+    };
+    startSession(QPointer<PlayerView>(this), QPointer<MediaService>(m_core->mediaService()),
+                 m_playbackGeneration, m_currentMediaId, m_currentMediaSourceId,
+                 static_cast<long long>(m_currentPosition * 10000000.0));
 }
 
 void PlayerView::reportProgressToServer()

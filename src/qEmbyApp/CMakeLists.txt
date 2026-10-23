@@ -64,13 +64,15 @@ qemby_link_libmpv(qEmbyApp)
 
 target_compile_definitions(qEmbyApp PRIVATE
     APP_NAME="${PROJECT_NAME}"
-    APP_VERSION="${PROJECT_VERSION}-security.2"
+    APP_VERSION="${PROJECT_VERSION}-security.3"
 )
 if(UNIX AND NOT APPLE)
     target_compile_definitions(qEmbyApp PRIVATE QEMBY_SYSTEM_PACKAGED=1)
 endif()
 if(QEMBY_BUILD_TESTS)
     target_compile_definitions(qEmbyApp PRIVATE QEMBY_UI_TESTS=1)
+    target_sources(qEmbyApp PRIVATE "${PROJECT_SOURCE_DIR}/tests/playback_ui_probe.cpp")
+    target_include_directories(qEmbyApp PRIVATE "${PROJECT_SOURCE_DIR}/tests" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 target_link_libraries(qEmbyApp PRIVATE

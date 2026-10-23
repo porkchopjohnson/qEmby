@@ -29,6 +29,16 @@ MpvWidget::MpvWidget(QWidget *parent)
     format.setSwapInterval(1); 
     this->setFormat(format);
 
+    m_renderInitTimer.setSingleShot(true);
+    m_renderInitTimer.setInterval(10000);
+    connect(&m_renderInitTimer, &QTimer::timeout, this, [this] {
+        if (!m_mpv_gl && !m_pendingUrl.isEmpty()) {
+            m_pendingUrl.clear();
+            m_pendingServerId.clear();
+            Q_EMIT errorOccurred(tr("Video rendering could not initialize an OpenGL context. Playback has been stopped."));
+        }
+    });
+
     m_videoDueTimer.setSingleShot(true);
     m_videoDueTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_videoDueTimer, &QTimer::timeout, this, [this]() {
@@ -150,6 +160,7 @@ MpvWidget::~MpvWidget() {
 
 
 void MpvWidget::shutdown() {
+    m_renderInitTimer.stop();
     if (!m_controller) return;
 
     
@@ -311,6 +322,7 @@ void MpvWidget::initializeGL() {
     }
 
     mpv_render_context_set_update_callback(m_mpv_gl, onMpvRenderUpdate, this);
+    m_renderInitTimer.stop();
 
     qInfo() << "[MpvWidget] MPV render context initialized"
             << "| resumePending:" << m_resumeWhenRenderReady;
@@ -715,7 +727,7 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
                                    loadOptions};
     }
 
-    const int err = m_controller->command(loadCommand, nullptr);
+    int err = m_controller->command(loadCommand, nullptr);
     if (err < 0 && !loadOptions.isEmpty()) {
         qWarning() << "[MpvWidget] loadfile with indexed per-file network options failed, retrying legacy form"
                    << "| error:" << mpv_error_string(err);
@@ -723,12 +735,16 @@ void MpvWidget::loadMediaNow(const QString &url, const QString &serverId, bool w
             QVariantList{QStringLiteral("loadfile"), playbackUrl,
                          QStringLiteral("replace"), loadOptions},
             nullptr);
+        err = legacyErr;
         if (legacyErr < 0) {
             qWarning() << "[MpvWidget] legacy loadfile per-file options failed, retrying plain loadfile"
                        << "| error:" << mpv_error_string(legacyErr);
-            m_controller->command(QVariantList{QStringLiteral("loadfile"), playbackUrl}, nullptr);
+            err = m_controller->command(QVariantList{QStringLiteral("loadfile"), playbackUrl}, nullptr);
         }
     }
+    if (err < 0)
+        Q_EMIT errorOccurred(tr("Media could not be opened: %1")
+                                .arg(QString::fromUtf8(mpv_error_string(err))));
 }
 
 void MpvWidget::applyUserAgentConfig(const UserAgentConfig &config) {
@@ -753,8 +769,10 @@ void MpvWidget::loadMedia(const QString &url, const QString &serverId) {
     if (!m_mpv_gl) {
         m_pendingUrl = url;
         m_pendingServerId = serverId;
+        m_renderInitTimer.start();
         return;
     }
+    m_renderInitTimer.stop();
     loadMediaNow(url, serverId, false);
 }
 
@@ -780,6 +798,9 @@ void MpvWidget::pause() {
 }
 
 void MpvWidget::stop() {
+    m_renderInitTimer.stop();
+    m_pendingUrl.clear();
+    m_pendingServerId.clear();
     resetVideoPresentation(true);
     m_controller->command(QVariantList{"stop"});
     m_currentUrl.clear();

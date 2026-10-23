@@ -110,6 +110,8 @@ private slots:
 
 private:
     void setupUi();
+    void startPlaybackSession();
+    void finishServerSession();
     void updateTitleElision();
     void updateOverlayLayout();
     void clearMediaSwitcherCache();
@@ -276,7 +278,9 @@ private:
 
     QString m_currentMediaId;
     QString m_currentMediaSourceId; 
-    QString m_currentPlaySessionId; 
+    QString m_currentPlaySessionId;
+    quint64 m_playbackGeneration = 0;
+    bool m_playbackStartRequested = false;
     MediaItem m_currentMediaItem;
     MediaSourceInfo m_currentMediaSourceInfo;
     

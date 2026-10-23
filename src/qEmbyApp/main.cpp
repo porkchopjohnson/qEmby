@@ -19,6 +19,7 @@
 #include <QTimer>
 #include <qembycore.h>
 #include <services/manager/servermanager.h>
+#include "playback_ui_probe.h"
 #endif
 
 #ifdef Q_OS_WIN
@@ -27,15 +28,30 @@
 int main(int argc, char *argv[]) {
 #ifdef QEMBY_UI_TESTS
   bool testUiLifecycle = false;
-  for (int i = 1; i < argc; ++i)
+  QString testMediaPath;
+  bool testMediaFailure = false;
+  bool testDelayedStart = false;
+  bool testNaturalEnd = false;
+  for (int i = 1; i < argc; ++i) {
     testUiLifecycle |= QByteArray(argv[i]) == "--test-ui-lifecycle";
+    const QByteArray arg(argv[i]);
+    if (arg == "--test-video-render" || arg == "--test-video-failure" || arg == "--test-video-start-race" || arg == "--test-video-eof") {
+      if (i + 1 >= argc)
+        return 2;
+      testMediaPath = QString::fromLocal8Bit(argv[++i]);
+      testMediaFailure = arg == "--test-video-failure";
+      testDelayedStart = arg == "--test-video-start-race";
+      testNaturalEnd = arg == "--test-video-eof";
+    }
+  }
   QTemporaryDir testHome;
-  if (testUiLifecycle) {
+  if (testUiLifecycle || !testMediaPath.isEmpty()) {
     if (!testHome.isValid())
       return 1;
     qputenv("XDG_CONFIG_HOME", testHome.path().toUtf8());
     qputenv("XDG_DATA_HOME", testHome.path().toUtf8());
     qputenv("XDG_CACHE_HOME", testHome.path().toUtf8());
+    qputenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent-qemby-test-bus");
   }
 #endif
 #ifdef Q_OS_WIN
@@ -49,6 +65,10 @@ int main(int argc, char *argv[]) {
 
   
   QSurfaceFormat format;
+  // A desktop core profile must explicitly select desktop OpenGL. On Qt
+  // Wayland/NVIDIA, DefaultRenderableType can select GLES and EGL rejects
+  // desktop core-profile context attributes with EGL_BAD_MATCH.
+  format.setRenderableType(QSurfaceFormat::OpenGL);
   format.setVersion(3, 3); 
   format.setProfile(QSurfaceFormat::CoreProfile);
   format.setDepthBufferSize(24);  
@@ -101,6 +121,12 @@ int main(int argc, char *argv[]) {
   w.show();
 
 #ifdef QEMBY_UI_TESTS
+  if (!testMediaPath.isEmpty()) {
+    QTimer::singleShot(200, &w, [&w, testMediaPath, testMediaFailure, testDelayedStart, testNaturalEnd] {
+      startPlaybackUiProbe(w, testMediaPath, testMediaFailure, testDelayedStart, testNaturalEnd);
+    });
+    return a.exec();
+  }
   if (testUiLifecycle) {
     QTimer::singleShot(500, &w, [&w] {
       auto *search = w.findChild<QLineEdit *>("titlebar-search");

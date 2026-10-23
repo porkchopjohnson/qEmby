@@ -77,6 +77,7 @@ private:
     std::unique_ptr<QOpenGLFramebufferObject> m_videoFramebuffer;
     std::unique_ptr<QOpenGLTextureBlitter> m_videoBlitter;
     QTimer m_videoDueTimer;
+    QTimer m_renderInitTimer;
     QElapsedTimer m_compositeStatsClock;
     QElapsedTimer m_compositionClock;
     int m_videoFrames = 0;
