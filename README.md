@@ -4,6 +4,10 @@
 
 <h1 align="center">qEmby</h1>
 
+> **Fedora KDE security fork:** see [FEDORA.md](FEDORA.md) for the security
+> changes, Fedora 44 RPM build/install instructions, and verification steps.
+> The upstream download links below do not contain this fork's security changes.
+
 <p align="center">
   <b>A modern desktop client for Emby & Jellyfin media servers</b><br/>
   <b>Emby & Jellyfin 媒体服务器的现代桌面客户端</b>

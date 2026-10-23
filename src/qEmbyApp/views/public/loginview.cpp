@@ -496,6 +496,7 @@ void LoginView::setupAddPage() {
   m_protocolInput = new ModernComboBox(this);
   m_protocolInput->setObjectName("login-protocol-combo");
   m_protocolInput->addItems({"http://", "https://"});
+  m_protocolInput->setCurrentIndex(1);
   m_protocolInput->setCursor(Qt::PointingHandCursor);
   m_protocolInput->setFixedWidth(qMax(126, m_protocolInput->sizeHint().width()));
 
@@ -1228,5 +1229,4 @@ void LoginView::openUserAgentDialogForCurrentEntry() {
   }
   dialog->deleteLater();
 }
-
 

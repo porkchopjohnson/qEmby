@@ -96,6 +96,11 @@ bool UpdateManager::isChecking(CheckMode mode) const
 
 void UpdateManager::checkForUpdates(CheckMode mode)
 {
+#ifdef QEMBY_SYSTEM_PACKAGED
+    if (mode == CheckMode::Manual)
+        Q_EMIT checkFailed(tr("This security build is updated through its Fedora package. Upstream installers would replace the security changes."), mode);
+    return;
+#endif
     bool &inProgress = mode == CheckMode::Automatic
                            ? m_automaticCheckInProgress
                            : m_manualCheckInProgress;

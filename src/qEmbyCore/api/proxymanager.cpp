@@ -1,4 +1,5 @@
 #include "proxymanager.h"
+#include "utils/credentialstore.h"
 
 #include "../config/config_keys.h"
 #include "../config/configstore.h"
@@ -192,7 +193,16 @@ ProxyConfig ProxyManager::globalConfig() const {
                  ? static_cast<quint16>(parsedPort)
                  : 0;
     p.username = cfg->get<QString>(ConfigKeys::ProxyUsername);
-    p.password = cfg->get<QString>(ConfigKeys::ProxyPassword);
+    const QString passwordKey = CredentialStore::key(QStringLiteral("global-proxy"),
+        {p.host, QString::number(p.port), p.username});
+    const QString legacyPassword = cfg->get<QString>(ConfigKeys::ProxyPassword);
+    if (!legacyPassword.isEmpty()) {
+        CredentialStore::write(passwordKey, legacyPassword);
+        cfg->set(ConfigKeys::ProxyPassword, QString());
+        p.password = legacyPassword;
+    } else if (!p.username.isEmpty()) {
+        p.password = CredentialStore::read(passwordKey);
+    }
     p.bypassLocalhost =
         cfg->get<bool>(ConfigKeys::ProxyBypassLocalhost, true);
     return p;
@@ -205,7 +215,9 @@ void ProxyManager::setGlobalConfig(const ProxyConfig& cfg) {
     store->set(ConfigKeys::ProxyHost, cfg.host);
     store->set(ConfigKeys::ProxyPort, static_cast<int>(cfg.port));
     store->set(ConfigKeys::ProxyUsername, cfg.username);
-    store->set(ConfigKeys::ProxyPassword, cfg.password);
+    CredentialStore::write(CredentialStore::key(QStringLiteral("global-proxy"),
+        {cfg.host, QString::number(cfg.port), cfg.username}), cfg.password);
+    store->set(ConfigKeys::ProxyPassword, QString());
     store->set(ConfigKeys::ProxyBypassLocalhost, cfg.bypassLocalhost);
     qInfo() << "[ProxyManager] global proxy updated | proxy:" << cfg.summary();
     

@@ -1,5 +1,6 @@
 #include "networkmanager.h"
 #include "useragentmanager.h"
+#include "utils/securityutils.h"
 #include <QJsonArray>
 #include <QJsonParseError>
 #include <QJsonValue>
@@ -143,7 +144,14 @@ void NetworkManager::applyHeaders(QNetworkRequest& request, const QMap<QString, 
 void NetworkManager::applyRequestOptions(QNetworkRequest& request,
                                          const NetworkRequestOptions& options) {
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
+                         QNetworkRequest::SameOriginRedirectPolicy);
+    if (request.hasRawHeader("X-Emby-Authorization") ||
+        request.hasRawHeader("Authorization")) {
+        QUrl serverUrl = request.url();
+        serverUrl.setQuery(QString());
+        if (!SecurityUtils::isSafeServerUrl(serverUrl))
+            throw std::runtime_error("Refusing credentials over insecure public HTTP or an invalid server URL.");
+    }
     if (!options.userAgentServerId.isEmpty()) {
         UserAgentManager::instance()->applyToRequest(
             request, options.userAgentServerId);
@@ -619,7 +627,7 @@ QCoro::Task<QJsonObject> NetworkManager::deleteResource(
     
     request.setHeader(QNetworkRequest::ContentTypeHeader, QVariant());
 
-    qDebug() << "[NetworkManager] DELETE encodedUrl:" << request.url().toEncoded();
+    qDebug() << "[NetworkManager] DELETE URL:" << safeUrlForLog(request.url());
 
     QNetworkReply* reply = m_networkManager->deleteResource(request);
     attachReplyHandlers(reply, options, QStringLiteral("DELETE"));

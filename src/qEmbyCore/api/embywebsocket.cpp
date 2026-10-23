@@ -1,4 +1,5 @@
 #include "embywebsocket.h"
+#include "utils/securityutils.h"
 #include "proxymanager.h"
 #include "useragentmanager.h"
 #include <QJsonDocument>
@@ -71,6 +72,10 @@ EmbyWebSocket::~EmbyWebSocket()
 
 void EmbyWebSocket::connectToServer()
 {
+    if (!SecurityUtils::isSafeServerUrl(QUrl(m_profile.url))) {
+        qWarning() << "[EmbyWebSocket] refusing insecure public server address";
+        return;
+    }
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         return; 
     }
@@ -90,11 +95,11 @@ void EmbyWebSocket::connectToServer()
              << "| host:" << proxy.hostName()
              << "| port:" << proxy.port();
 
-    qDebug() << "[EmbyWebSocket] Connecting to:" << url;
+    qDebug() << "[EmbyWebSocket] Connecting to:" << SecurityUtils::safeUrl(QUrl(url));
     if (m_profile.ignoreSslVerification &&
         url.startsWith("wss://", Qt::CaseInsensitive)) {
         qWarning() << "[EmbyWebSocket] SSL certificate verification is DISABLED"
-                   << "| url:" << url;
+                   << "| url:" << SecurityUtils::safeUrl(QUrl(url));
     }
     QNetworkRequest request{QUrl(url)};
     UserAgentManager::instance()->applyToRequest(request, m_profile.id);

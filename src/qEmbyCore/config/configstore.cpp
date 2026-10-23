@@ -67,7 +67,7 @@ ConfigStore::ConfigStore(QObject* parent) : QObject(parent) {
         m_settings->setValue(ConfigKeys::ImageCacheDuration, "7");
     }
     if (!m_settings->contains(canonicalStorageKey(ConfigKeys::CheckForUpdates))) {
-        m_settings->setValue(canonicalStorageKey(ConfigKeys::CheckForUpdates), true);
+        m_settings->setValue(canonicalStorageKey(ConfigKeys::CheckForUpdates), false);
     }
 }
 

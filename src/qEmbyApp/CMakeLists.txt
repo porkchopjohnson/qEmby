@@ -64,8 +64,11 @@ qemby_link_libmpv(qEmbyApp)
 
 target_compile_definitions(qEmbyApp PRIVATE
     APP_NAME="${PROJECT_NAME}"
-    APP_VERSION="${PROJECT_VERSION}"
+    APP_VERSION="${PROJECT_VERSION}-security.1"
 )
+if(UNIX AND NOT APPLE)
+    target_compile_definitions(qEmbyApp PRIVATE QEMBY_SYSTEM_PACKAGED=1)
+endif()
 
 target_link_libraries(qEmbyApp PRIVATE
     Qt${QT_VERSION_MAJOR}::Gui
@@ -128,6 +131,7 @@ set_target_properties(qEmbyApp PROPERTIES
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
+    OUTPUT_NAME qemby
     # MACOSX_BUNDLE_ICON_FILE app.icns # 如果未来需要适配 macOS 图标，取消此注释
 )
 
@@ -135,10 +139,6 @@ set_target_properties(qEmbyApp PROPERTIES
 include(GNUInstallDirs)
 
 set(_qemby_app_runtime_install_dir "${CMAKE_INSTALL_BINDIR}")
-if(UNIX AND NOT APPLE AND QEMBY_RUNTIME_LIB_SUBDIR)
-    set(_qemby_app_runtime_install_dir
-        "${CMAKE_INSTALL_LIBDIR}/${QEMBY_RUNTIME_LIB_SUBDIR}")
-endif()
 
 # 注意：目标从 qEmby 改为 qEmbyApp
 install(TARGETS qEmbyApp

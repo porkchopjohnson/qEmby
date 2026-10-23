@@ -223,6 +223,9 @@ bool MpvController::init() {
         mpv_set_option_string(m_mpv, "config", "yes");
     }
 
+    // libmpv/FFmpeg must validate HTTPS certificates too, including when a
+    // user-supplied mpv.conf is enabled.
+    mpv_set_option_string(m_mpv, "tls-verify", "yes");
     if (mpv_initialize(m_mpv) < 0) {
         emit errorOccurred(tr("Failed to initialize MPV context."));
         return false;

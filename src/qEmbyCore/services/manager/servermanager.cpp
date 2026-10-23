@@ -1,10 +1,19 @@
 #include "servermanager.h"
 #include "../../api/embywebsocket.h"
+#include "../../utils/credentialstore.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QFile>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QDir>
+
+namespace {
+QString secretKey(const ServerProfile &profile, const QString &kind)
+{
+    return CredentialStore::key(kind, {profile.id, profile.url, profile.userId});
+}
+}
 
 ServerManager::ServerManager(NetworkManager* nm, QObject* parent)
     : QObject(parent), m_network(nm) {
@@ -40,6 +49,8 @@ ServerProfile ServerManager::addServer(const ServerProfile& profile) {
 void ServerManager::removeServer(const QString& id) {
     for (int i = 0; i < m_servers.size(); ++i) {
         if (m_servers[i].id == id) {
+            CredentialStore::remove(secretKey(m_servers[i], QStringLiteral("server-token")));
+            CredentialStore::remove(secretKey(m_servers[i], QStringLiteral("server-proxy")));
             
             m_servers.removeAt(i);
 
@@ -97,6 +108,7 @@ void ServerManager::updateServerProxy(const QString& id,
             return;
         }
         m_servers[i].proxy = proxy;
+        CredentialStore::write(secretKey(m_servers[i], QStringLiteral("server-proxy")), proxy.password);
         m_servers[i].useGlobalProxy = useGlobalProxy;
 
         
@@ -223,13 +235,20 @@ void ServerManager::saveSettings() {
         obj["ignoreSslVerification"] = p.ignoreSslVerification;
         obj["userId"] = p.userId;
         obj["userName"] = p.userName;
-        obj["accessToken"] = p.accessToken;
+        obj["hasSavedToken"] = !p.accessToken.isEmpty();
+        if (!p.accessToken.isEmpty())
+            CredentialStore::write(secretKey(p, QStringLiteral("server-token")), p.accessToken);
         obj["deviceId"] = p.deviceId;
         obj["isAdmin"] = p.isAdmin;
         obj["canDownloadMedia"] = p.canDownloadMedia;
         obj["iconBase64"] = p.iconBase64;
         obj["useGlobalProxy"] = p.useGlobalProxy;
-        obj["proxy"] = p.proxy.toJson();
+        QJsonObject proxy = p.proxy.toJson();
+        proxy.remove(QStringLiteral("password"));
+        proxy["hasSavedPassword"] = !p.proxy.password.isEmpty();
+        if (!p.proxy.password.isEmpty())
+            CredentialStore::write(secretKey(p, QStringLiteral("server-proxy")), p.proxy.password);
+        obj["proxy"] = proxy;
         obj["useGlobalUserAgent"] = p.useGlobalUserAgent;
         obj["userAgent"] = p.userAgent.toJson();
         array.append(obj);
@@ -237,10 +256,12 @@ void ServerManager::saveSettings() {
 
     QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(path);
-    QFile file(path + "/servers.json");
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(array).toJson());
-    }
+    QSaveFile file(path + "/servers.json");
+    const QByteArray data = QJsonDocument(array).toJson();
+    if (!file.open(QIODevice::WriteOnly) ||
+        !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner) ||
+        file.write(data) != data.size() || !file.commit())
+        qWarning() << "[ServerManager] failed to atomically save private server settings";
 }
 
 void ServerManager::loadSettings() {
@@ -249,6 +270,8 @@ void ServerManager::loadSettings() {
     if (!file.open(QIODevice::ReadOnly)) return;
 
     QJsonArray array = QJsonDocument::fromJson(file.readAll()).array();
+    file.close();
+    bool needsMigration = false;
     m_servers.clear();
     for (auto val : array) {
         QJsonObject obj = val.toObject();
@@ -260,17 +283,38 @@ void ServerManager::loadSettings() {
         p.ignoreSslVerification = obj["ignoreSslVerification"].toBool(false);
         p.userId = obj["userId"].toString();
         p.userName = obj["userName"].toString();
-        p.accessToken = obj["accessToken"].toString();
         p.deviceId = obj["deviceId"].toString();
         p.isAdmin = obj["isAdmin"].toBool();
         p.canDownloadMedia = obj["canDownloadMedia"].toBool(false);
         p.iconBase64 = obj["iconBase64"].toString();
         p.useGlobalProxy = obj["useGlobalProxy"].toBool(false);
         p.proxy = ProxyConfig::fromJson(obj["proxy"].toObject());
+        const QString tokenKey = secretKey(p, QStringLiteral("server-token"));
+        const QString proxyKey = secretKey(p, QStringLiteral("server-proxy"));
+        if (obj.contains(QStringLiteral("accessToken"))) {
+            p.accessToken = obj["accessToken"].toString();
+            if (!p.accessToken.isEmpty())
+                CredentialStore::write(tokenKey, p.accessToken);
+            needsMigration = true;
+        } else if (obj["hasSavedToken"].toBool()) {
+            p.accessToken = CredentialStore::read(tokenKey);
+        }
+        if (obj["proxy"].toObject().contains(QStringLiteral("password"))) {
+            if (!p.proxy.password.isEmpty())
+                CredentialStore::write(proxyKey, p.proxy.password);
+            needsMigration = true;
+        } else if (obj["proxy"].toObject()["hasSavedPassword"].toBool()) {
+            p.proxy.password = CredentialStore::read(proxyKey);
+        }
         p.useGlobalUserAgent = obj["useGlobalUserAgent"].toBool(false);
         p.userAgent = UserAgentConfig::fromJson(obj["userAgent"].toObject());
         m_servers.append(p);
     }
+
+    // Scrub legacy secrets even if the wallet is unavailable. The current
+    // session still works; the next launch may require signing in again.
+    if (needsMigration)
+        saveSettings();
 
     
     if (!m_servers.isEmpty()) {

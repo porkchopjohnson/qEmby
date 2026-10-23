@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=qEmby
+Comment=Emby and Jellyfin media client (security build)
+Exec=qemby
+Icon=qemby
+Terminal=false
+Categories=AudioVideo;Video;Player;
+StartupNotify=true
+StartupWMClass=qEmby

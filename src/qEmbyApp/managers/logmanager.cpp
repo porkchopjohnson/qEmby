@@ -1,6 +1,8 @@
 #include "logmanager.h"
 #include "config/config_keys.h"
 #include "config/configstore.h"
+#include "utils/securityutils.h"
+#include <cstdio>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -16,10 +18,14 @@ static const int kMaxFiles = 3;
 static void spdlogMessageHandler(QtMsgType type, const QMessageLogContext &ctx,
                                   const QString &msg) {
   auto logger = spdlog::get(kLoggerName);
-  if (!logger)
+  const QString sanitized = SecurityUtils::redactLogMessage(msg);
+  if (!logger) {
+    const QByteArray line = qFormatLogMessage(type, ctx, sanitized).toLocal8Bit();
+    std::fprintf(stderr, "%s\n", line.constData());
     return;
+  }
 
-  std::string m = msg.toStdString();
+  std::string m = sanitized.toStdString();
   std::string category = ctx.category ? ctx.category : "";
   std::string formatted =
       category.empty() ? m : fmt::format("[{}] {}", category, m);
@@ -61,6 +67,7 @@ void LogManager::init() {
   if (m_initialized)
     return;
   m_initialized = true;
+  qInstallMessageHandler(spdlogMessageHandler);
 
   bool enabled =
       ConfigStore::instance()->get<bool>(ConfigKeys::LogEnable, false);
@@ -126,7 +133,7 @@ void LogManager::teardownSpdlog() {
   }
 
   
-  qInstallMessageHandler(nullptr);
+  // Keep redacting console/journal output when file logging is disabled.
 
   spdlog::drop(kLoggerName);
 }

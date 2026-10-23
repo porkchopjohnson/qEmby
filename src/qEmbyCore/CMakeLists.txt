@@ -8,6 +8,12 @@ add_library(qEmbyCore SHARED
     ${CORE_SOURCES}
 )
 
+find_package(Qt6Keychain REQUIRED)
+target_link_libraries(qEmbyCore PRIVATE qt6keychain)
+if(UNIX AND NOT APPLE)
+    set_target_properties(qEmbyCore PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
+
 target_include_directories(qEmbyCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

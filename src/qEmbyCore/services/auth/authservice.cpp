@@ -1,4 +1,5 @@
 #include "authservice.h"
+#include "utils/securityutils.h"
 #include <QJsonObject>
 #include <QUuid>
 #include <QUrl>
@@ -25,6 +26,8 @@ QCoro::Task<ServerProfile> AuthService::login(QString serverUrl,
                                               QString password,
                                               bool ignoreSslVerification)
 {
+    if (!SecurityUtils::isSafeServerUrl(QUrl(serverUrl)))
+        throw std::runtime_error("Use HTTPS with a valid server address. HTTP is allowed only for localhost or private LAN IP addresses.");
     QString cleanUrl = serverUrl;
     while (cleanUrl.endsWith('/')) {
         cleanUrl.chop(1);

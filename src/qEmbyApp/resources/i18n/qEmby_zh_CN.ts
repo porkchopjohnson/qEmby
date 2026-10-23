@@ -93,8 +93,8 @@ Release notes:
         <translation>服务器地址 (例如 192.168.1.1 或域名)</translation>
     </message>
     <message>
-        <source>Server URL (e.g. example.com, example.com/emby or https:
-        <translation>服务器 URL（例如 example.com、example.com/emby 或 https:
+        <source>Server URL (e.g. example.com, example.com/emby or https://example.com)</source>
+        <translation>服务器 URL（例如 example.com、example.com/emby 或 https://example.com）</translation>
     </message>
     <message>
         <source>Server URL</source>
@@ -259,8 +259,8 @@ This action cannot be undone.</source>
         <translation>请输入有效的端口号。</translation>
     </message>
     <message>
-        <source>Server URL must use http:
-        <translation>服务器 URL 必须使用 http:
+        <source>Server URL must use http:// or https://.</source>
+        <translation>服务器 URL 必须使用 http:// 或 https://。</translation>
     </message>
     <message>
         <source>Connecting...</source>
@@ -1247,8 +1247,8 @@ This action cannot be undone.</source>
         <translation>请为“%2”的 %1 图像粘贴一个图片地址。</translation>
     </message>
     <message>
-        <source>https:
-        <translation>https:
+        <source>https://example.com/image.jpg</source>
+        <translation>https://example.com/image.jpg</translation>
     </message>
     <message>
         <source>Save Image</source>

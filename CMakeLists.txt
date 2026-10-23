@@ -2,12 +2,25 @@ cmake_minimum_required(VERSION 3.19)
 
 project(qEmby VERSION 0.0.8 LANGUAGES CXX)
 
+option(QEMBY_BUILD_TESTS "Build security regression tests" OFF)
+set(QWINDOWKIT_BUILD_STATIC ON CACHE BOOL "Link the window kit statically")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(UNIX AND NOT APPLE)
+    include(CheckPIESupported)
+    check_pie_supported(LANGUAGES CXX)
+    add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=3)
+    add_link_options(-Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+endif()
+
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
+if(UNIX AND NOT APPLE)
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}/qemby")
+endif()
 include(QEmbyPlatformDeps)
 
 set(QEMBY_RUNTIME_LIB_SUBDIR "qemby" CACHE STRING
@@ -70,7 +83,7 @@ set(CMAKE_SKIP_INSTALL_RULES ON)
 FetchContent_Declare(
     QCoro
     GIT_REPOSITORY https://github.com/danvratil/qcoro.git
-    GIT_TAG v0.10.0
+    GIT_TAG fa5bc4296a252ad71c85209b60675bb025024a1e # v0.10.0
 )
 
 # 强制 QCoro 使用 Qt6 进行编译，并关闭不必要的测试与示例构建以加快编译速度
@@ -78,6 +91,7 @@ set(QCORO_QT_MAJOR_VERSION 6 CACHE STRING "Use Qt6 for QCoro" FORCE)
 set(QCORO_BUILD_EXAMPLES OFF CACHE BOOL "Disable QCoro examples" FORCE)
 set(QCORO_WITH_QML OFF CACHE BOOL "Disable QCoro QML module" FORCE)
 set(QCORO_WITH_QTQUICK OFF CACHE BOOL "Disable QCoro QtQuick module" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Link fetched dependencies statically" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "Disable QCoro tests" FORCE)
 
 FetchContent_MakeAvailable(QCoro)
@@ -90,7 +104,7 @@ qemby_ensure_noop_install_script("${qcoro_BINARY_DIR}")
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.15.3
+    GIT_TAG 6fa36017cfd5731d617e1a934f0e5ea9c4445b13 # v1.15.3
 )
 set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Disable spdlog examples" FORCE)
 set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Disable spdlog tests" FORCE)
@@ -111,3 +125,8 @@ add_subdirectory(src/qEmbyCore)
 add_subdirectory(src/qEmbyApp)
 
 include(QEmbyPackaging)
+
+if(QEMBY_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
