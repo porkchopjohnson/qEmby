@@ -60,9 +60,7 @@ QCoro::Task<ServerProfile> AuthService::login(QString serverUrl,
 
     
     
-    QJsonObject infoResp = co_await m_networkManager->get(
-        cleanUrl + "/System/Info/Public", QMap<QString, QString>(),
-        requestOptions);
+    QJsonObject infoResp;
 
     
     ServerProfile tempProfile;
@@ -76,6 +74,15 @@ QCoro::Task<ServerProfile> AuthService::login(QString serverUrl,
             QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
     tempProfile.ignoreSslVerification = ignoreSslVerification;
+
+    // Identify the client even before login, without sending an old token.
+    try {
+        ApiClient discoveryClient(tempProfile, m_networkManager);
+        infoResp = co_await discoveryClient.get("/System/Info/Public");
+    } catch (const std::exception &e) {
+        throw std::runtime_error(tr("Server discovery failed (/System/Info/Public): %1")
+                                     .arg(QString::fromUtf8(e.what())).toStdString());
+    }
 
     
     QString productName = infoResp["ProductName"].toString();
@@ -101,7 +108,13 @@ QCoro::Task<ServerProfile> AuthService::login(QString serverUrl,
     payload["Pw"] = password;
 
     
-    QJsonObject authResp = co_await tempClient.post("/Users/AuthenticateByName", payload);
+    QJsonObject authResp;
+    try {
+        authResp = co_await tempClient.post("/Users/AuthenticateByName", payload);
+    } catch (const std::exception &e) {
+        throw std::runtime_error(tr("Sign-in failed (/Users/AuthenticateByName): %1")
+                                     .arg(QString::fromUtf8(e.what())).toStdString());
+    }
 
     
     tempProfile.accessToken = authResp["AccessToken"].toString();
@@ -109,6 +122,8 @@ QCoro::Task<ServerProfile> AuthService::login(QString serverUrl,
     QJsonObject userObj = authResp["User"].toObject();
     tempProfile.userId = userObj["Id"].toString();
     tempProfile.userName = userObj["Name"].toString();
+    if (tempProfile.accessToken.isEmpty() || tempProfile.userId.isEmpty())
+        throw std::runtime_error("The server returned an incomplete sign-in response (missing access token or user ID).");
 
     QJsonObject policyObj = userObj["Policy"].toObject();
     tempProfile.isAdmin = policyObj["IsAdministrator"].toBool();
@@ -206,29 +221,27 @@ QCoro::Task<ServerProfile> AuthService::validateSession(const QString& serverId)
     }
 
     
+    if (targetProfile.accessToken.isEmpty())
+        throw std::runtime_error("No saved login token is available. Unlock KDE Wallet or sign in again.");
     ApiClient tempClient(targetProfile, m_networkManager);
 
     
     
-    co_await tempClient.get("/System/Info");
-
+    // Check the user's session, not an endpoint that may require admin access.
+    QJsonObject userResp;
     try {
-        const QJsonObject userResp =
-            co_await tempClient.get(QStringLiteral("/Users/%1").arg(targetProfile.userId));
-        const QJsonObject policyObj = userResp.value(QStringLiteral("Policy")).toObject();
-        targetProfile.userName = userResp.value(QStringLiteral("Name")).toString(
-            targetProfile.userName);
-        targetProfile.isAdmin = policyObj.value(QStringLiteral("IsAdministrator"))
-                                    .toBool(targetProfile.isAdmin);
-        targetProfile.canDownloadMedia =
-            resolveContentDownloadPermission(policyObj);
-        m_serverManager->addServer(targetProfile);
-    } catch (const std::exception& e) {
-        qWarning() << "[AuthService] Failed to refresh current user policy during"
-                      " session validation"
-                   << "| userId:" << targetProfile.userId
-                   << "| error:" << e.what();
+        userResp = co_await tempClient.get(QStringLiteral("/Users/%1").arg(targetProfile.userId));
+    } catch (const std::exception &e) {
+        throw std::runtime_error(tr("Saved session validation failed (/Users/{id}): %1")
+                                     .arg(QString::fromUtf8(e.what())).toStdString());
     }
+    const QJsonObject policyObj = userResp.value(QStringLiteral("Policy")).toObject();
+    targetProfile.userName = userResp.value(QStringLiteral("Name")).toString(
+        targetProfile.userName);
+    targetProfile.isAdmin = policyObj.value(QStringLiteral("IsAdministrator"))
+                                .toBool(targetProfile.isAdmin);
+    targetProfile.canDownloadMedia = resolveContentDownloadPermission(policyObj);
+    m_serverManager->addServer(targetProfile);
 
     
     m_serverManager->setActiveServer(targetProfile.id);

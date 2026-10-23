@@ -46,7 +46,7 @@ class MainWindow : public QMainWindow
         QStackedWidget *m_viewStack;
         LoginView *m_loginView;
         HomeView *m_homeView;
-        QLineEdit *m_globalSearchBox;
+        QLineEdit *m_globalSearchBox = nullptr;
         QCompleter *m_globalSearchCompleter = nullptr;
         QStringListModel *m_globalSearchModel = nullptr;
         SearchHistoryPopup *m_globalSearchHistoryPopup = nullptr;

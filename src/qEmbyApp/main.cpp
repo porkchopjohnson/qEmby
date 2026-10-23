@@ -13,11 +13,31 @@
 #include "managers/singleapplicationmanager.h"
 #include "config/config_keys.h"
 #include "config/configstore.h"
+#ifdef QEMBY_UI_TESTS
+#include <QLineEdit>
+#include <QTemporaryDir>
+#include <QTimer>
+#include <qembycore.h>
+#include <services/manager/servermanager.h>
+#endif
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
 int main(int argc, char *argv[]) {
+#ifdef QEMBY_UI_TESTS
+  bool testUiLifecycle = false;
+  for (int i = 1; i < argc; ++i)
+    testUiLifecycle |= QByteArray(argv[i]) == "--test-ui-lifecycle";
+  QTemporaryDir testHome;
+  if (testUiLifecycle) {
+    if (!testHome.isValid())
+      return 1;
+    qputenv("XDG_CONFIG_HOME", testHome.path().toUtf8());
+    qputenv("XDG_DATA_HOME", testHome.path().toUtf8());
+    qputenv("XDG_CACHE_HOME", testHome.path().toUtf8());
+  }
+#endif
 #ifdef Q_OS_WIN
   bool isRDP = GetSystemMetrics(SM_REMOTESESSION) != 0;
   if (isRDP) {
@@ -79,6 +99,29 @@ int main(int argc, char *argv[]) {
   w.setWindowIcon(appIcon);
 #endif
   w.show();
+
+#ifdef QEMBY_UI_TESTS
+  if (testUiLifecycle) {
+    QTimer::singleShot(500, &w, [&w] {
+      auto *search = w.findChild<QLineEdit *>("titlebar-search");
+      auto *core = w.findChild<QEmbyCore *>();
+      if (!search || !core) {
+        qCritical("Title bar/search destroyed during KDE style polish");
+        qApp->exit(1);
+        return;
+      }
+      core->serverManager()->clearActiveSession();
+      search->setText("search-after-server-change");
+      if (search->text() != "search-after-server-change") {
+        qApp->exit(1);
+        return;
+      }
+      qInfo("KDE title-bar lifetime and active-server-change regression: PASS");
+      qApp->exit(0);
+    });
+    return a.exec();
+  }
+#endif
 
   
   

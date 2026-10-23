@@ -10,16 +10,20 @@ QMap<QString, QString> ApiClient::getAuthHeaders() const {
 
     
     
-    QString auth = QString("MediaBrowser Client=\"qEmby\", Device=\"Desktop\", "
+    const QString scheme = m_profile.type == ServerProfile::Emby
+                               ? QStringLiteral("Emby") : QStringLiteral("MediaBrowser");
+    QString auth = QString("%2 Client=\"qEmby\", Device=\"Desktop\", "
                            "DeviceId=\"%1\", Version=\"0.1\"")
-                       .arg(m_profile.deviceId);
+                       .arg(m_profile.deviceId, scheme);
 
     if (!m_profile.accessToken.isEmpty()) {
-        auth += QString(", Token=\"%1\"").arg(m_profile.accessToken);
+        headers.insert("X-Emby-Token", m_profile.accessToken);
+        if (m_profile.type == ServerProfile::Jellyfin)
+            auth += QString(", Token=\"%1\"").arg(m_profile.accessToken);
     }
 
     
-    headers.insert("X-Emby-Authorization", auth);
+    headers.insert("Authorization", auth);
     return headers;
 }
 

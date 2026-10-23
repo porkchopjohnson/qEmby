@@ -2,7 +2,22 @@
 
 This fork targets **Fedora 44 x86_64 / KDE Plasma**, using Fedora's Qt 6,
 libmpv, and QtKeychain libraries. The application reports version
-`0.0.8-security.1`; the RPM release is `1.security.fc44`.
+`0.0.8-security.2`; the RPM release is `2.security.fc44`.
+
+## Compatibility fixes in security.2
+
+- Fixed a KDE Breeze crash after login: the custom title bar now lives in the
+  central layout rather than the menu-bar slot, which Breeze can replace and
+  delete during widget polish.
+- Use the documented Emby `Authorization: Emby ...` client-identification
+  header and `X-Emby-Token` session header. Jellyfin uses `Authorization:
+  MediaBrowser ...` with its token metadata.
+- Include client identification during server discovery, and label failures
+  with the discovery, sign-in, or saved-session stage.
+- Validate saved sessions using the current user's endpoint rather than full
+  system information, so an ordinary media account needs no admin access.
+- Added strict mock-server login/session tests and a Breeze title-bar lifetime
+  regression test. No real media-server credentials are used by these tests.
 
 ## Security changes
 
@@ -47,7 +62,7 @@ new configuration sync exports; sign in again on each device.
 ## Install the built package
 
 ```bash
-sudo dnf install ./build-fedora/qemby-0.0.8-1.security.fc44.x86_64.rpm
+sudo dnf install ./build-fedora/qemby-0.0.8-2.security.fc44.x86_64.rpm
 ```
 
 Launch **qEmby** from KDE's application launcher, or run `qemby`.

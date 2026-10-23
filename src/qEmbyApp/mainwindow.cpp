@@ -398,7 +398,9 @@ MainWindow::MainWindow(QWidget *parent)
     });
 #endif
 
-    setMenuWidget(windowBar);
+    // Keep the custom title bar out of QMainWindow's menu slot. KDE Breeze
+    // calls menuBar() during polish, which replaces and deletes a non-QMenuBar
+    // menu widget (including our search field and window buttons).
 
     auto *updateManager = UpdateManager::instance();
     connect(updateManager, &UpdateManager::updateAvailable, this,
@@ -436,7 +438,13 @@ MainWindow::MainWindow(QWidget *parent)
     m_viewStack->setObjectName("main-view-stack"); 
     m_viewStack->setPalette(pal);
     m_viewStack->setAutoFillBackground(true);
-    setCentralWidget(m_viewStack);
+    auto *content = new QWidget(this);
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(0);
+    contentLayout->addWidget(windowBar);
+    contentLayout->addWidget(m_viewStack, 1);
+    setCentralWidget(content);
 
     m_loginView = new LoginView(m_core, this);
     m_homeView = new HomeView(m_core, this);

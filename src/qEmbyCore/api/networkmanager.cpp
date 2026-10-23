@@ -145,7 +145,8 @@ void NetworkManager::applyRequestOptions(QNetworkRequest& request,
                                          const NetworkRequestOptions& options) {
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::SameOriginRedirectPolicy);
-    if (request.hasRawHeader("X-Emby-Authorization") ||
+    if (request.hasRawHeader("X-Emby-Token") ||
+        request.hasRawHeader("X-Emby-Authorization") ||
         request.hasRawHeader("Authorization")) {
         QUrl serverUrl = request.url();
         serverUrl.setQuery(QString());

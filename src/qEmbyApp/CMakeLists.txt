@@ -64,10 +64,13 @@ qemby_link_libmpv(qEmbyApp)
 
 target_compile_definitions(qEmbyApp PRIVATE
     APP_NAME="${PROJECT_NAME}"
-    APP_VERSION="${PROJECT_VERSION}-security.1"
+    APP_VERSION="${PROJECT_VERSION}-security.2"
 )
 if(UNIX AND NOT APPLE)
     target_compile_definitions(qEmbyApp PRIVATE QEMBY_SYSTEM_PACKAGED=1)
+endif()
+if(QEMBY_BUILD_TESTS)
+    target_compile_definitions(qEmbyApp PRIVATE QEMBY_UI_TESTS=1)
 endif()
 
 target_link_libraries(qEmbyApp PRIVATE
